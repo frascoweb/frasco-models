@@ -4,24 +4,8 @@ from frasco.utils import (AttrDict, import_string, populate_obj, RequirementMiss
 from frasco.expression import compile_expr, eval_expr
 from .backend import Backend
 from .query import Query, QueryFilter, QueryFilterGroup, and_, or_
-import inflection
-import math
+from .utils import *
 import inspect
-from werkzeug import LocalProxy
-
-
-def as_single_model(model):
-    return inflection.underscore(model.__name__)
-
-
-def as_many_models(model):
-    return inflection.pluralize(as_single_model(model))
-
-
-def clean_proxy(value):
-    if isinstance(value, LocalProxy):
-        return value._get_current_object()
-    return value
 
 
 class ModelsFeature(Feature):
@@ -184,7 +168,7 @@ class ModelsFeature(Feature):
 
     @action("create_model", default_option="model")
     def create(self, model, **attrs):
-        obj = self[model](**attrs)
+        obj = self[model](**clean_kwargs_proxy(attrs))
         if not self.create.as_:
             self.create.as_ = as_single_model(obj.__class__)
         return obj
@@ -197,7 +181,7 @@ class ModelsFeature(Feature):
             obj = self[model]()
             auto_assign = True
         if attrs:
-            populate_obj(obj, attrs)
+            populate_obj(obj, clean_kwargs_proxy(attrs))
         self.backend.save(obj)
         if not self.save.as_ and auto_assign:
             self.save.as_ = as_single_model(obj.__class__)
@@ -208,7 +192,7 @@ class ModelsFeature(Feature):
         form = form or current_context.data.form
         obj = self[model]()
         form.populate_obj(obj)
-        populate_obj(obj, attrs)
+        populate_obj(obj, clean_kwargs_proxy(attrs))
         if not self.create_from_form.as_:
             self.create_from_form.as_ = as_single_model(obj.__class__)
         return obj
@@ -225,7 +209,7 @@ class ModelsFeature(Feature):
             else:
                 obj = model()
         form.populate_obj(obj)
-        populate_obj(obj, attrs)
+        populate_obj(obj, clean_kwargs_proxy(attrs))
         self.backend.save(obj)
         if not self.save_form.as_ and auto_assign:
             self.save_form.as_ = as_single_model(obj.__class__)
@@ -245,7 +229,7 @@ class ModelsFeature(Feature):
                 obj.__class__.ensure_column(attr, list)
             elif getattr(obj, attr) is None:
                 setattr(obj, attr, [])
-            getattr(obj, attr).extend(value)
+            getattr(obj, attr).extend(map(clean_proxy, value))
         self.backend.save(obj)
 
     @action("remove_child_model")
@@ -256,7 +240,7 @@ class ModelsFeature(Feature):
                 value = [value]
             if attr in obj and getattr(obj, attr):
                 for v in value:
-                    getattr(obj, attr).remove(v)
+                    getattr(obj, attr).remove(clean_proxy(v))
         self.backend.save(obj)
 
     @action("check_model_not_exists")
@@ -282,54 +266,3 @@ class ModelsFeature(Feature):
             slug = "%s-%s" % (baseslug, counter)
             counter += 1
         return slug
-
-
-class Pagination(object):
-    def __init__(self, page, per_page, total):
-        self.page = page
-        self.per_page = per_page
-        self.total = total
-        self.nb_pages = int(math.ceil(float(self.total) / float(per_page)))
-
-    @property
-    def offset(self):
-        return (self.page - 1) * self.per_page
-
-    @property
-    def prev_page(self):
-        return self.page - 1 if self.page > 1 else None
-
-    @property
-    def next_page(self):
-        return self.page + 1 if self.page < self.nb_pages else None
-
-    @property
-    def prev(self):
-        if self.prev_page is None:
-            return None
-        return Pagination(self.prev_page, self.per_page, self.total)
-
-    @property
-    def next(self):
-        if self.next_page is None:
-            return None
-        return Pagination(self.next_page, self.per_page, self.total)
-
-    # code from Flask-Sqlalchemy
-    # https://github.com/mitsuhiko/flask-sqlalchemy/
-    def iter_pages(self, left_edge=2, left_current=2,
-                   right_current=5, right_edge=2):
-        last = 0
-        for num in xrange(1, self.nb_pages + 1):
-            if num <= left_edge or \
-               (num > self.page - left_current - 1 and \
-                num < self.page + right_current) or \
-               num > self.nb_pages - right_edge:
-                if last + 1 != num:
-                    yield None
-                yield num
-                last = num
-
-
-class PageOutOfBoundError(Exception):
-    pass

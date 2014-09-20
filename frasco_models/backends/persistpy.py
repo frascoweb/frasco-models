@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 from frasco_models import Backend, QueryFilter, QueryFilterGroup
 from persistpy import *
+from ..utils import clean_proxy
 
 
 Model = None
@@ -85,4 +86,4 @@ class PersistpyBackend(Backend):
             if filter.operator == QueryFilter.IN:
                 v = [v]
             v = dict([(self.operator_mapping[filter.operator], v)])
-        return dict([(filter.field, v)])
+        return dict([(filter.field, clean_proxy(v))])
