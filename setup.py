@@ -5,6 +5,9 @@ def desc():
     with open("README.md") as f:
         return f.read()
 
+def reqs():
+    with open('requirements.txt') as f:
+        return f.read().splitlines()
 
 setup(
     name='frasco-models',
@@ -17,9 +20,8 @@ setup(
     long_description=desc(),
     packages=find_packages(),
     platforms='any',
-    install_requires=[
+    install_requires=reqs() + [
         'frasco',
-        'inflection',
-        'pymongo==2.7.1'
+        'persistpy'
     ]
 )
