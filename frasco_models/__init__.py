@@ -91,6 +91,9 @@ class ModelsFeature(Feature):
     def query(self, model):
         return Query(self.ensure_model(model), self.backend)
 
+    def q(self, model):
+        return self.query(model)
+
     @action("build_model_query")
     def build_query(self, model, scope=None, filter_from=None, order_by=None, limit=None, offset=None, **kwargs):
         q = self.query(model)

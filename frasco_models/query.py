@@ -79,6 +79,12 @@ class Query(object):
     def get(self, pk):
         return self.backend.find(self.model, pk)
 
+    def get_or_404(self, pk):
+        obj = self.backend.find(self.model, pk)
+        if obj is None:
+            abort(404)
+        return obj
+
     def select(self, *args):
         return self.clone(_fields=args)
 

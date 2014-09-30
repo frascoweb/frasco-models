@@ -1,5 +1,9 @@
 
 
+class ModelNotFoundError(Exception):
+    pass
+
+
 class Backend(object):
     def __init__(self, app, options):
         pass

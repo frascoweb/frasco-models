@@ -4,9 +4,6 @@ from persistpy import *
 from ..utils import clean_proxy
 
 
-Model = None
-
-
 class PersistpyBackend(Backend):
     name = "persistpy"
     operator_mapping = dict([(QueryFilter.NE, "$ne"), (QueryFilter.GT, "$gt"), (QueryFilter.GTE, "$gte"),
@@ -14,10 +11,9 @@ class PersistpyBackend(Backend):
                         (QueryFilter.NIN, "$nin")])
 
     def __init__(self, app, options):
-        global Model
         self.client = MongoClient(options.get("url", "localhost"))
         self.session = Session(self.client[options["db"]])
-        Model = self.session.create_model_base()
+        self.Model = self.session.create_model_base()
 
     def ensure_model(self, name):
         return self.session.mapper.ensure_model(name)
