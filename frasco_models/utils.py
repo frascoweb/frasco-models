@@ -1,6 +1,7 @@
 import inflection
 from werkzeug import LocalProxy
 import math
+from flask import current_app
 
 
 def as_single_model(model):
@@ -54,8 +55,6 @@ class Pagination(object):
             return None
         return Pagination(self.next_page, self.per_page, self.total)
 
-    # code from Flask-Sqlalchemy
-    # https://github.com/mitsuhiko/flask-sqlalchemy/
     def iter_pages(self, left_edge=2, left_current=2,
                    right_current=5, right_edge=2):
         last = 0
@@ -72,3 +71,22 @@ class Pagination(object):
 
 class PageOutOfBoundError(Exception):
     pass
+
+
+def move_obj_position_in_collection(obj, new_position, position_field='position', scope=None):
+    current_position = getattr(obj, position_field, 0)
+    up = new_position > current_position
+    shift = -1 if up else 1
+    lower_idx = min(current_position, new_position)
+    lower_idx += 1 if up else 0
+    upper_idx = max(current_position, new_position)
+    upper_idx -= 0 if up else 1
+
+    q = current_app.features.models.query(obj.__class__)
+    if scope:
+        q = q.filter(**scope)
+    q = q.filter(**dict([('%s__gte' % position_field, lower_idx), ('%s__lte' % position_field, upper_idx)]))
+    q.update(dict([('%s__incr' % position_field, shift)]))
+
+    setattr(obj, position_field, new_position)
+    obj.save()

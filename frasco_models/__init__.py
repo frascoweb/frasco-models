@@ -2,10 +2,13 @@ from frasco import Feature, action, current_app, request, abort, listens_to, cur
 from frasco.utils import (AttrDict, import_string, populate_obj, RequirementMissingError,\
                           find_classes_in_module, slugify)
 from frasco.expression import compile_expr, eval_expr
-from .backend import Backend
-from .query import Query, QueryFilter, QueryFilterGroup, and_, or_
+from .backend import *
 from .utils import *
+from .query import *
 import inspect
+
+
+Model = None # model base
 
 
 class ModelsFeature(Feature):
@@ -15,11 +18,13 @@ class ModelsFeature(Feature):
                 "scopes": {}}
     
     def init_app(self, app):
+        global Model
         self.backend_cls = self.get_backend_class(self.options["backend"])
         self.backend = self.backend_cls(app, self.options)
         self.scopes = compile_expr(self.options["scopes"])
         self.connected = False
         self.models = {}
+        self.Model = Model = self.backend.make_model_base()
 
         @listens_to("before_task")
         @listens_to("before_command")
@@ -35,14 +40,6 @@ class ModelsFeature(Feature):
             if self.connected:
                 self.backend.close()
                 self.connected = False
-
-        models_pkg = "models"
-        if app.import_name != "__main__":
-            models_pkg = app.import_name + "." + models_pkg
-        try:
-            __import__(models_pkg)
-        except ImportError:
-            pass
 
     def get_backend_class(self, name):
         try:
@@ -79,11 +76,14 @@ class ModelsFeature(Feature):
             for k, v in fields.iteritems():
                 if not isinstance(v, dict):
                     fields[k] = dict(type=v)
-            self.backend.ensure_fields(model_name, fields)
+            self.backend.ensure_schema(model_name, fields)
         return self.models[model_name]
 
     def __getitem__(self, name):
         return self.ensure_model(name)
+
+    def __setitem__(self, name, model):
+        self.models[name] = model
 
     def __contains__(self, name):
         return name in self.models
@@ -91,34 +91,33 @@ class ModelsFeature(Feature):
     def query(self, model):
         return Query(self.ensure_model(model), self.backend)
 
-    def q(self, model):
-        return self.query(model)
-
-    @action("build_model_query")
-    def build_query(self, model, scope=None, filter_from=None, order_by=None, limit=None, offset=None, **kwargs):
+    def scoped_query(self, model, scope=None):
         q = self.query(model)
-
-        filters = dict()
+        if "model_scopes" in current_context.data:
+            q = q.filter(**current_context.data.model_scopes.get(model.__name__, {}))
         if scope:
             scopes = scope if isinstance(scope, list) else list([scope])
             for s in scopes:
                 if s not in self.scopes:
-                    raise Exception("Missing model scope '%s'" % s)
-                filters.update(eval_expr(self.scopes[s], current_context.vars))
-        if "model_scopes" in current_context.data:
-            filters.update(current_context.data.model_scopes.get(model.__name__, {}))
+                    raise QueryError("Missing model scope '%s'" % s)
+                q = q.filter(**eval_expr(self.scopes[s], current_context.vars))
+        return q
 
+    @action("build_model_query")
+    def build_query(self, model, scope=None, filter_from=None, order_by=None, limit=None, offset=None, **kwargs):
+        q = self.scoped_query(model, scope)
+
+        filters = {}
         if filter_from == "form":
             filters.update(dict([(f.name, f.data) for f in current_context.data.form]))
         elif filter_from == "url":
             filters.update(dict([(k, v) for k, v in request.values.items()]))
         elif filter_from == "args":
             filters.update(dict([(k, v) for k, v in request.view_args.items()]))
-
         filters.update(kwargs.get("filters", kwargs))
 
         if filters:
-            q = q.filter_by(**filters)
+            q = q.filter(**filters)
         if order_by:
             q = q.order_by(order_by)
         if limit:
@@ -129,7 +128,9 @@ class ModelsFeature(Feature):
         return q
 
     @action("paginate_query")
-    def paginate(self, query, page=1, per_page=None, check_bounds=True):
+    def paginate(self, query, page=None, per_page=None, check_bounds=True):
+        if page is None:
+            page = int(page or request.values.get("page", 1))
         if per_page is None:
             per_page = self.options["pagination_per_page"]
         total = query.order_by(None).offset(None).limit(None).count()
@@ -139,24 +140,22 @@ class ModelsFeature(Feature):
         return query.offset(pagination.offset).limit(per_page), pagination
 
     @action("find_model")
-    def find_one(self, model, not_found_404=True, **query):
-        model = self[model]
-        q = self.build_query(model, **query)
-        obj = q.first()
+    def find_first(self, model, not_found_404=True, **query):
+        model = self.ensure_model(model)
+        obj = self.build_query(model, **query).first()
         if obj is None and not_found_404:
             abort(404)
-        if not self.find_one.as_:
-            self.find_one.as_ = as_single_model(model)
+        if not self.find_first.as_:
+            self.find_first.as_ = as_single_model(model)
         current_context.data.model = obj
         return obj
 
     @action("find_models", default_option="model")
-    def find(self, model, paginate=False, page=None, pagination_var="pagination", **query):
-        model = self[model]
+    def find_all(self, model, paginate=False, page=None, pagination_var="pagination", **query):
+        model = self.ensure_model(model)
         q = self.build_query(model, **query)
 
         if paginate:
-            page = int(page or request.values.get("page", 1))
             per_page = paginate if isinstance(paginate, int) else None
             try:
                 q, pagination = self.paginate(q, page, per_page)
@@ -164,14 +163,22 @@ class ModelsFeature(Feature):
                 abort(404)
             current_context.vars[pagination_var] = pagination
 
-        if not self.find.as_:
-            self.find.as_ = as_many_models(model)
+        if not self.find_all.as_:
+            self.find_all.as_ = as_many_models(model)
         current_context.data.models = q
         return q
 
+    @action("count_models", default_option="model")
+    def count(self, model, **query):
+        model = self.ensure_model(model)
+        count = self.build_query(model, **query).count()
+        if not self.count.as_:
+            self.count.as_ = "%s_count" % as_single_model(model)
+        return count
+
     @action("create_model", default_option="model")
     def create(self, model, **attrs):
-        obj = self[model](**clean_kwargs_proxy(attrs))
+        obj = self.ensure_model(model)(**clean_kwargs_proxy(attrs))
         if not self.create.as_:
             self.create.as_ = as_single_model(obj.__class__)
         return obj
@@ -181,11 +188,11 @@ class ModelsFeature(Feature):
         auto_assign = False
         obj = clean_proxy(obj)
         if obj is None:
-            obj = self[model]()
+            obj = self.ensure_model(model)()
             auto_assign = True
         if attrs:
             populate_obj(obj, clean_kwargs_proxy(attrs))
-        self.backend.save(obj)
+        obj.save()
         if not self.save.as_ and auto_assign:
             self.save.as_ = as_single_model(obj.__class__)
         return obj
@@ -193,7 +200,7 @@ class ModelsFeature(Feature):
     @action("create_form_model", default_option="model", requires=["form"])
     def create_from_form(self, model, form=None, **attrs):
         form = form or current_context.data.form
-        obj = self[model]()
+        obj = self.ensure_model(model)()
         form.populate_obj(obj)
         populate_obj(obj, clean_kwargs_proxy(attrs))
         if not self.create_from_form.as_:
@@ -207,65 +214,41 @@ class ModelsFeature(Feature):
         auto_assign = False
         if obj is None:
             if isinstance(model, str):
-                obj = self[model]()
+                obj = self.ensure_model(model)()
                 auto_assign = True
             else:
                 obj = model()
         form.populate_obj(obj)
         populate_obj(obj, clean_kwargs_proxy(attrs))
-        self.backend.save(obj)
+        obj.save()
         if not self.save_form.as_ and auto_assign:
             self.save_form.as_ = as_single_model(obj.__class__)
         return obj
 
     @action("delete_model", default_option="obj")
     def delete(self, obj):
-        self.backend.delete(clean_proxy(obj))
-
-    @action("add_child_model")
-    def add_child(self, obj, **opts):
-        obj = clean_proxy(obj)
-        for attr, value in opts.iteritems():
-            if not isinstance(value, list):
-                value = [value]
-            if attr not in obj:
-                obj.__class__.ensure_column(attr, list)
-            elif getattr(obj, attr) is None:
-                setattr(obj, attr, [])
-            getattr(obj, attr).extend(map(clean_proxy, value))
-        self.backend.save(obj)
-
-    @action("remove_child_model")
-    def remove_child(self, obj, **opts):
-        obj = clean_proxy(obj)
-        for attr, value in opts.iteritems():
-            if not isinstance(value, list):
-                value = [value]
-            if attr in obj and getattr(obj, attr):
-                for v in value:
-                    getattr(obj, attr).remove(clean_proxy(v))
-        self.backend.save(obj)
+        obj.delete()
 
     @action("check_model_not_exists")
-    def check_not_exists(self, model, error_message=None, **filters):
-        q = self.query(self[model]).filter_by_dict(filters)
+    def check_not_exists(self, model, error_message=None, **query):
+        q = self.build_query(model, **query)
         if q.count() > 0:
             if error_message:
                 flash(error_message, "error")
-            current_context.exit(trigger_action_group="model_not_unique")
+            current_context.exit(trigger_action_group="model_exists")
 
     @action("define_model_scope")
     def define_scope(self, model, **filters):
-        ctx.data.setdefault("model_scopes", {})
-        ctx.data.model_scopes.setdefault(model, {})
-        ctx.data.model_scopes[model].update(filters)
+        current_context.data.setdefault("model_scopes", {})
+        current_context.data.model_scopes.setdefault(model, {})
+        current_context.data.model_scopes[model].update(filters.get('filters', filters))
 
     @action(as_="slug")
     def create_unique_slug(self, value, model, column="slug"):
         baseslug = slug = slugify(value)
-        model = self[model]
+        model = self.ensure_model(model)
         counter = 1
-        while self.query(model).filter_by(**dict([(column, slug)])).count() > 0:
+        while self.query(model).filter(**dict([(column, slug)])).count() > 0:
             slug = "%s-%s" % (baseslug, counter)
             counter += 1
         return slug

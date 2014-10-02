@@ -1,54 +1,12 @@
 from frasco import abort
 
 
-class QueryFilter(object):
-    EQ = "="
-    NE = "!="
-    GT = ">"
-    GTE = ">="
-    LT = "<"
-    LTE = "<="
-    IN = "in"
-    NIN = "nin"
-
-    operators = [EQ, NE, GT, GTE, LT, LTE, IN, NIN]
-
-    def __init__(self, field, value, operator=EQ):
-        self.field = field
-        self.value = value
-        self.operator = operator
-
-    def __repr__(self):
-        return "%s%s%s" % (self.field, self.operator, self.value)
-
-
-class QueryFilterGroup(list):
-    AND = "AND"
-    OR = "OR"
-
-    @classmethod
-    def from_dict(cls, filters):
-        obj = cls()
-        for k, v in filters.iteritems():
-            obj.append(QueryFilter(k, v))
-        return obj
-
-    def __init__(self, iter=None, operator=AND):
-        if iter is None:
-            iter = []
-        super(QueryFilterGroup, self).__init__(iter)
-        self.operator = operator
-
-    def __repr__(self):
-        return (" %s " % self.operator).join([repr(o) for o in self])
-
-
 def and_(*args):
-    return QueryFilterGroup(args)
+    return {"$and": args}
 
 
 def or_(*args):
-    return QueryFilterGroup(args, QueryFilterGroup.OR)
+    return {"$or": args}
 
 
 class QueryError(Exception):
@@ -67,7 +25,7 @@ class Query(object):
     ASC = "ASC"
     DESC = "DESC"
 
-    def __init__(self, model, backend=None):
+    def __init__(self, model, backend):
         self.model = model
         self.backend = backend
         self._fields = set()
@@ -76,11 +34,11 @@ class Query(object):
         self._offset = None
         self._limit = None
 
-    def get(self, pk):
-        return self.backend.find(self.model, pk)
+    def get(self, id):
+        return self.backend.find_by_id(self.model, id)
 
-    def get_or_404(self, pk):
-        obj = self.backend.find(self.model, pk)
+    def get_or_404(self, id):
+        obj = self.backend.find_by_id(self.model, id)
         if obj is None:
             abort(404)
         return obj
@@ -88,41 +46,26 @@ class Query(object):
     def select(self, *args):
         return self.clone(_fields=args)
 
-    def filter(self, *args):
-        q = self.clone()
-        for f in args:
-            q._filters.append(f)
-        return q
-
-    def filter_by(self, **filters):
+    def filter(self, **filters):
         q = self.clone()
         for field, value in filters.iteritems():
-            operator = QueryFilter.EQ
-            for op in QueryFilter.operators:
-                if field.endswith(op):
-                    operator = op
-                    field = field[:-len(op)].rstrip()
-                    break
-            q._filters.append(QueryFilter(field, value, operator))
+            q._filters.append((field, value))
         return q
-
-    def op(self, field, operator, value):
-        return QueryFilter(field, value, operator)
 
     def order_by(self, field, direction=None):
         q = self.clone()
         if field is None:
             q._order_by = []
             return
-        if direction is None:
-            if isinstance(field, tuple):
-                (field, direction) = field
-            elif " " in field:
-                (field, direction) = field.rsplit(" ", 1)
-            else:
-                direction = self.ASC
-
-        q._order_by.append((field, direction.upper()))
+        if not isinstance(field, (list, tuple)):
+            field = map(str.strip, field.split(','))
+        for f in field:
+            d = direction or self.ASC
+            if isinstance(f, tuple):
+                (f, d) = f
+            elif " " in f:
+                (f, d) = f.rsplit(" ", 1)
+            q._order_by.append((f, d.upper()))
         return q
 
     def offset(self, offset):
@@ -165,6 +108,20 @@ class Query(object):
     def count(self):
         return self.backend.count(self)
 
+    def update(self, data):
+        return self.backend.update(self, data)
+
+    def delete(self):
+        return self.backend.delete(self)
+
+    def for_json(self):
+        return {"model": self.model.__class__.__name__,
+                "fields": self._fields,
+                "filters": self._filters,
+                "order_by": self._order_by,
+                "offset": self._offset,
+                "limit": self._limit}
+
     def __iter__(self):
         return self.all()
 
@@ -174,3 +131,16 @@ class Query(object):
     def __repr__(self):
         return "Query(fields=%s, filters=%s, order_by=%s, limit=%s, offset=%s)" %\
             (self._fields, self._filters, self._order_by, self._limit, self._offset)
+
+
+known_operators = ('eq', 'ne', 'lt', 'lte', 'gt', 'gte', 'in', 'nin', 'contains',
+                   'incr', 'push')
+
+
+def split_field_operator(field, check_operator=True):
+    operator = 'eq'
+    if '__' in field:
+        field, operator = field.split('__', 1)
+    if check_operator and operator not in known_operators:
+        raise QueryError("Unknown operator '%s'" % operator)
+    return field, operator

@@ -1,12 +1,31 @@
+from .query import NoResultError
 
 
 class ModelNotFoundError(Exception):
     pass
 
 
+class ModelSchemaError(Exception):
+    pass
+
+
+class RegisteringMetaClass(type):
+    def __init__(cls, name, bases, attrs):
+        type.__init__(cls, name, bases, attrs)
+        cls.__backend__.models[name] = cls
+
+
 class Backend(object):
     def __init__(self, app, options):
-        pass
+        self.app = app
+        self.options = options
+        self.models = {}
+
+    def make_model_base(self):
+        return self.make_registering_model_base(object)
+
+    def make_registering_model_base(self, base, name='Model'):
+        return RegisteringMetaClass(name, (base,), {"__backend__": self})
 
     def connect(self):
         pass
@@ -15,28 +34,33 @@ class Backend(object):
         pass
 
     def ensure_model(self, model_name):
+        if model_name not in self.models:
+            raise ModelNotFoundError('Model %s does not exist' % model_name)
+        return self.models[model_name]
+
+    def ensure_schema(self, model_name, fields):
         pass
 
-    def ensure_fields(self, model_name, fields):
-        pass
-
-    def find(self, pk):
-        pass
+    def find_by_id(self, id):
+        raise NotImplementedError()
 
     def find_all(self, query):
-        pass
+        raise NotImplementedError()
 
     def find_first(self, query):
-        pass
+        raise NotImplementedError()
 
     def find_one(self, query):
-        pass
+        obj = self.find_first(query)
+        if not obj:
+            raise NoResultError()
+        return obj
 
     def count(self, query):
-        pass
+        raise NotImplementedError()
 
-    def save(self, obj):
-        pass
+    def update(self, query, data):
+        raise NotImplementedError()
 
-    def delete(self, obj):
-        pass
+    def delete(self, query):
+        raise NotImplementedError()
