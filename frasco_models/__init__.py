@@ -2,29 +2,37 @@ from frasco import Feature, action, current_app, request, abort, listens_to, cur
 from frasco.utils import (AttrDict, import_string, populate_obj, RequirementMissingError,\
                           find_classes_in_module, slugify)
 from frasco.expression import compile_expr, eval_expr
+from werkzeug.local import LocalProxy
 from .backend import *
 from .utils import *
 from .query import *
 import inspect
 
 
-Model = None # model base
+_db = None
+
+def get_current_db():
+    return _db
+
+db = LocalProxy(get_current_db)
 
 
 class ModelsFeature(Feature):
     name = "models"
-    defaults = {"backend": "frasco_models.backends.persistpy.PersistpyBackend",
+    defaults = {"backend": "persistpy",
                 "pagination_per_page": 10,
-                "scopes": {}}
+                "scopes": {},
+                "import_models": True}
     
     def init_app(self, app):
-        global Model
         self.backend_cls = self.get_backend_class(self.options["backend"])
         self.backend = self.backend_cls(app, self.options)
         self.scopes = compile_expr(self.options["scopes"])
         self.connected = False
         self.models = {}
-        self.Model = Model = self.backend.make_model_base()
+
+        global _db
+        self.db = _db = self.backend.db
 
         @listens_to("before_task")
         @listens_to("before_command")
@@ -41,14 +49,22 @@ class ModelsFeature(Feature):
                 self.backend.close()
                 self.connected = False
 
+        if self.options["import_models"]:
+            models_pkg = self.options['import_models']
+            if not isinstance(self.options['import_models'], str):
+                models_pkg = "models"
+            if app.import_name != "__main__":
+                models_pkg = app.import_name + "." + models_pkg
+            try:
+                __import__(models_pkg)
+            except ImportError:
+                pass
+
     def get_backend_class(self, name):
         try:
+            backend_cls = import_string("frasco_models.backends.%s" % name)
+        except ImportError:
             backend_cls = import_string(name)
-        except ImportError as e:
-            try:
-                backend_cls = import_string("frasco_models.backends.%s" % name)
-            except ImportError:
-                raise e
 
         if inspect.ismodule(backend_cls):
             # Gives the possibility to reference a module and auto-discover the Backend class

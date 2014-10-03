@@ -1,4 +1,5 @@
 from .query import NoResultError
+from frasco import AttrDict
 
 
 class ModelNotFoundError(Exception):
@@ -20,6 +21,17 @@ class Backend(object):
         self.app = app
         self.options = options
         self.models = {}
+        self._db = None
+
+    @property
+    def db(self):
+        if not self._db:
+            self._db = AttrDict(Model=self.make_model_base())
+        return self._db
+
+    @db.setter
+    def db(self, db):
+        self._db = db
 
     def make_model_base(self):
         return self.make_registering_model_base(object)
