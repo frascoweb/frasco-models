@@ -6,7 +6,7 @@ from frasco_models.utils import clean_proxy
 from flask.ext.mongoengine import (MongoEngine, Document as FlaskDocument,\
                                    DynamicDocument as FlaskDynamicDocument,\
                                    BaseQuerySet as FlaskQuerySet)
-from mongoengine import Q, DynamicDocument as BaseDynamicDocument
+from mongoengine import Q, DynamicDocument as BaseDynamicDocument, ListField
 from mongoengine.base import get_document, BaseDocument
 from bson import json_util
 from bson.objectid import ObjectId
@@ -18,7 +18,7 @@ class MongoEngineJSONEncoder(JSONEncoder):
     def default(self, obj):
         if isinstance(obj, BaseDocument) and not getattr(obj, 'for_json', None):
             return json_util._json_convert(obj.to_mongo())
-        return superclass.default(self, obj)
+        return JSONEncoder.default(self, obj)
 
 
 class BaseQuerySet(FlaskQuerySet):
@@ -46,6 +46,7 @@ class MongoengineBackend(Backend):
         self.db = MongoEngine(app)
         self.db.Document = Document
         self.db.DynamicDocument = DynamicDocument
+        self.db.SetField = SetField
         # Flask-MongoEngine overrides the json_encoder but their
         # version ignores if for_json() is defined
         app.json_encoder = MongoEngineJSONEncoder
@@ -133,3 +134,22 @@ class MongoengineBackend(Backend):
             else:
                 out[field] = value
         return out
+
+
+class SetField(ListField):
+    """ Set field.
+
+        Extends ListField, so that's how it's represented in Mongo.
+    """
+    def __set__(self, instance, value):
+        return super().__set__(instance, set(value))
+
+    def to_mongo(self, value):
+        return super().to_mongo(list(value))
+
+    def to_python(self, value):
+        return set(super().to_python(value))
+
+    def validate(self, value):
+        if not isinstance(value, set):
+            self.error('Only sets may be used.')
