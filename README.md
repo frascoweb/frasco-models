@@ -41,7 +41,7 @@ Options:
 ### mongoengine
 
 [Mongoengine](http://mongoengine.org/) is a powerful ODM which is better suited at
-larger applications.
+larger applications. This backend uses [Flask-MongoEngine](http://flask-mongoengine.readthedocs.org/en/latest/).
 
 This backend requires that you define your models in advance. Some features requires
 custom fields and an exception of type `frasco_models.ModelSchemaError` will be triggered
@@ -54,7 +54,6 @@ Options:
  - *port*
  - *username*
  - *password*
- - *mongo_connect_extra*: a hash of extra keyword arguments for the `connect()` function
 
 ## Querying
 
