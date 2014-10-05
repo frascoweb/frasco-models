@@ -142,13 +142,13 @@ class SetField(ListField):
         Extends ListField, so that's how it's represented in Mongo.
     """
     def __set__(self, instance, value):
-        return super().__set__(instance, set(value))
+        return super(SetField, self).__set__(instance, set(value or []))
 
     def to_mongo(self, value):
-        return super().to_mongo(list(value))
+        return super(SetField, self).to_mongo(list(value))
 
     def to_python(self, value):
-        return set(super().to_python(value))
+        return set(super(SetField, self).to_python(value))
 
     def validate(self, value):
         if not isinstance(value, set):
