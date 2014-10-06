@@ -8,6 +8,7 @@ class PersistpyBackend(Backend):
     name = "persistpy"
 
     def __init__(self, app, options):
+        super(PersistpyBackend, self).__init__(app, options)
         self.client = MongoClient(options.get("url", "localhost"))
         self.session = Session(self.client[options["db"]])
 
@@ -72,6 +73,8 @@ class PersistpyBackend(Backend):
         field, value = filter
         field, operator = split_field_operator(field)
         value = clean_proxy(value)
+        if field == 'id':
+            field = '_id'
         if field == '_id' and not isinstance(value, ObjectId):
             value = ObjectId(value)
         if operator not in ('eq', 'contains'):
