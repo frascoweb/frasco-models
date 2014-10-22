@@ -1,1 +1,4 @@
 *.pyc
+/build
+/dist
+/frasco_models.egg-info
