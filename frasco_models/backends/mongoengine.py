@@ -31,6 +31,13 @@ class Document(FlaskDocument):
     meta = {'abstract': True,
             'queryset_class': BaseQuerySet}
 
+    def __taskdump__(self):
+        return 'frasco::current_app.features.models[%s]' % self.__class__.__name__, str(self.id)
+
+    @classmethod
+    def __taskload__(cls, id):
+        return cls.objects.get(id=id)
+
 
 class DynamicDocument(FlaskDynamicDocument):
     meta = {'abstract': True,
