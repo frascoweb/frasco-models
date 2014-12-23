@@ -1,6 +1,10 @@
 from frasco import abort
 
 
+def Q(**kwargs):
+    return kwargs.items()
+
+
 def and_(*args):
     return {"$and": args}
 
@@ -46,8 +50,9 @@ class Query(object):
     def select(self, *args):
         return self.clone(_fields=args)
 
-    def filter(self, **filters):
+    def filter(self, *grouped_filters, **filters):
         q = self.clone()
+        q._filters.extend(grouped_filters)
         for field, value in filters.iteritems():
             q._filters.append((field, value))
         return q
