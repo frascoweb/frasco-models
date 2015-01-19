@@ -260,11 +260,6 @@ class ModelsFeature(Feature):
         current_context.data.model_scopes[model].update(filters.get('filters', filters))
 
     @action(as_="slug")
-    def create_unique_slug(self, value, model, column="slug"):
-        baseslug = slug = slugify(value)
-        model = self.ensure_model(model)
-        counter = 1
-        while self.query(model).filter(**dict([(column, slug)])).count() > 0:
-            slug = "%s-%s" % (baseslug, counter)
-            counter += 1
-        return slug
+    def create_unique_slug(self, value, model, column="slug", **kwargs):
+        slug = slugify(value)
+        return ensure_unique_value(model, column, slug, **kwargs)

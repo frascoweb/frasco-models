@@ -59,6 +59,8 @@ class MongoengineBackend(Backend):
         app.json_encoder = MongoEngineJSONEncoder
 
     def ensure_model(self, name):
+        if isinstance(name, FlaskDocument):
+            return name
         return get_document(name)
 
     def ensure_schema(self, name, fields):

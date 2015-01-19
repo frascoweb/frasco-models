@@ -90,3 +90,14 @@ def move_obj_position_in_collection(obj, new_position, position_field='position'
 
     setattr(obj, position_field, new_position)
     obj.save()
+
+
+def ensure_unique_value(model, column, value, fallback=None, counter_start=1):
+    if not fallback:
+        fallback = value + "-%(counter)s"
+    counter = counter_start
+    q = current_app.features.models.query(model)
+    while q.filter(**dict([(column, value)])).count() > 0:
+        value = fallback % {'counter': counter}
+        counter += 1
+    return value
