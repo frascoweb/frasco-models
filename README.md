@@ -26,9 +26,9 @@ Backends options are provided as part of the feature's options.
 
 ### persistpy
 
-[Persistpy]() makes is very easy to get started. It provides a very flexible way
-to persist any kind of data without any kind of pre-determined structure. This is
-the default backend.
+[Persistpy](https://github.com/frascoweb/persistpy) makes is very easy to get started.
+It provides a very flexible way to persist any kind of data without any kind of
+pre-determined structure. This is the default backend.
 
 With Persistpy, models are completely dynamic, you do not need to define them in
 advance, you can just create them on the fly.

@@ -13,8 +13,8 @@ setup(
     zip_safe=False,
     platforms='any',
     install_requires=[
-        # 'frasco',
-        # 'persistpy',
+        'frasco',
+        'persistpy',
         'inflection',
         'flask-mongoengine>=0.7'
     ]
