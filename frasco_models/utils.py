@@ -73,7 +73,9 @@ class PageOutOfBoundError(Exception):
     pass
 
 
-def move_obj_position_in_collection(obj, new_position, position_field='position', scope=None):
+def move_obj_position_in_collection(obj, new_position, position_field='position', scope=None, data=None):
+    if not data:
+        data = {}
     current_position = getattr(obj, position_field, 0)
     up = new_position > current_position
     shift = -1 if up else 1
@@ -86,10 +88,8 @@ def move_obj_position_in_collection(obj, new_position, position_field='position'
     if scope:
         q = q.filter(**scope)
     q = q.filter(**dict([('%s__gte' % position_field, lower_idx), ('%s__lte' % position_field, upper_idx)]))
-    q.update(dict([('%s__incr' % position_field, shift)]))
-
+    q.update(dict(dict([('%s__incr' % position_field, shift)]), **data))
     setattr(obj, position_field, new_position)
-    obj.save()
 
 
 def ensure_unique_value(model, column, value, fallback=None, counter_start=1):

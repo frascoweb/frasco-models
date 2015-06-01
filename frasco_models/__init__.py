@@ -22,7 +22,8 @@ class ModelsFeature(Feature):
     defaults = {"backend": "persistpy",
                 "pagination_per_page": 10,
                 "scopes": {},
-                "import_models": True}
+                "import_models": True,
+                "ensure_schema": True}
     
     def init_app(self, app):
         self.backend_cls = self.get_backend_class(self.options["backend"])
@@ -88,7 +89,7 @@ class ModelsFeature(Feature):
             model_name = model_name.__name__
         if model_name not in self.models:
             self.models[model_name] = self.backend.ensure_model(model_name)
-        if fields:
+        if fields and self.options['ensure_schema']:
             for k, v in fields.iteritems():
                 if not isinstance(v, dict):
                     fields[k] = dict(type=v)
@@ -208,7 +209,7 @@ class ModelsFeature(Feature):
             auto_assign = True
         if attrs:
             populate_obj(obj, clean_kwargs_proxy(attrs))
-        obj.save()
+        self.backend.save(obj)
         if not self.save.as_ and auto_assign:
             self.save.as_ = as_single_model(obj.__class__)
         return obj
@@ -236,14 +237,14 @@ class ModelsFeature(Feature):
                 obj = model()
         form.populate_obj(obj)
         populate_obj(obj, clean_kwargs_proxy(attrs))
-        obj.save()
+        self.backend.save(obj)
         if not self.save_form.as_ and auto_assign:
             self.save_form.as_ = as_single_model(obj.__class__)
         return obj
 
     @action("delete_model", default_option="obj")
     def delete(self, obj):
-        obj.delete()
+        self.backend.remove(obj)
 
     @action("check_model_not_exists")
     def check_not_exists(self, model, error_message=None, **query):

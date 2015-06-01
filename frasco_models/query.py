@@ -1,4 +1,5 @@
 from frasco import abort
+import operator
 
 
 def Q(**kwargs):
@@ -141,11 +142,22 @@ class Query(object):
 known_operators = ('eq', 'ne', 'lt', 'lte', 'gt', 'gte', 'in', 'nin', 'contains',
                    'incr', 'push')
 
+operators_mapping = {
+    'eq': operator.eq,
+    'ne': operator.ne,
+    'lt': operator.lt,
+    'lte': operator.le,
+    'gt': operator.gt,
+    'gte': operator.ge
+}
 
-def split_field_operator(field, check_operator=True):
+
+def split_field_operator(field, check_operator=True, with_python_operator=False):
     operator = 'eq'
     if '__' in field:
         field, operator = field.split('__', 1)
     if check_operator and operator not in known_operators:
         raise QueryError("Unknown operator '%s'" % operator)
+    if with_python_operator:
+        return field, operator, operators_mapping.get(operator)
     return field, operator

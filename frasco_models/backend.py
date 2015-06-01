@@ -45,6 +45,12 @@ class Backend(object):
     def close(self):
         pass
 
+    def save(self, obj):
+        obj.save()
+
+    def remove(self, obj):
+        obj.delete()
+
     def ensure_model(self, model_name):
         if model_name not in self.models:
             raise ModelNotFoundError('Model %s does not exist' % model_name)
