@@ -160,7 +160,7 @@ class MongoengineBackend(Backend):
         return qs
 
     def _transform_query_filter_group(self, group):
-        operator, filters = group.popitem()
+        operator, filters = group.items()[0]
         qs = None
         for filter in filters:
             if isinstance(filter, dict):

@@ -6,6 +6,10 @@ from frasco_models.utils import clean_proxy
 from flask.ext.sqlalchemy import SQLAlchemy as BaseSQLAchemy, Model as BaseModel, _BoundDeclarativeMeta, _QueryProperty
 from sqlalchemy.ext.declarative import declarative_base
 import sqlalchemy
+from sqlalchemy.inspection import inspect as sqlainspect
+from sqlalchemy.sql import sqltypes
+import inspect
+import datetime
 
 
 class Model(BaseModel):
@@ -27,8 +31,16 @@ class SQLAlchemy(BaseSQLAchemy):
         return base
 
 
+sqla_type_mapping = [
+    (sqltypes.Integer, int),
+    (sqltypes.Boolean, bool),
+    (sqltypes.DateTime, datetime.datetime),
+    (sqltypes.Date, datetime.date)
+]
+
+
 class SqlalchemyBackend(Backend):
-    name = "sqllalchemy"
+    name = "sqlalchemy"
 
     def __init__(self, app, options):
         super(SqlalchemyBackend, self).__init__(app, options)
@@ -59,6 +71,20 @@ class SqlalchemyBackend(Backend):
         for fname, _ in fields.iteritems():
             if fname not in model.__mapper__.attrs:
                 raise ModelSchemaError("Missing field '%s' in model '%s'" % (fname, name))
+
+    def inspect_fields(self, model):
+        if not inspect.isclass(model):
+            model = model.__class__
+        mapper = sqlainspect(model)
+        fields = []
+        for attr in mapper.column_attrs:
+            field_type = str
+            for coltype, pytype in sqla_type_mapping:
+                if isinstance(attr.columns[0].type, coltype):
+                    field_type = pytype
+                    break
+            fields.append((attr.key, dict(type=field_type)))
+        return fields
 
     def save(self, obj):
         self.db.session.add(obj)
@@ -105,7 +131,7 @@ class SqlalchemyBackend(Backend):
         return qs
 
     def _transform_query_filter_group(self, model, group):
-        operator, filters = group.popitem()
+        operator, filters = group.items()[0]
         transformed_filters = []
         for filter in filters:
             if isinstance(filter, dict):

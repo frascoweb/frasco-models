@@ -2,11 +2,14 @@ from frasco import Feature, action, current_app, request, abort, listens_to, cur
 from frasco.utils import (AttrDict, import_string, populate_obj, RequirementMissingError,\
                           find_classes_in_module, slugify)
 from frasco.expression import compile_expr, eval_expr
+from frasco.templating import FileLoader, FileSystemLoader
 from werkzeug.local import LocalProxy
 from .backend import *
 from .utils import *
 from .query import *
 import inspect
+import os
+import inflection
 
 
 _db = None
@@ -17,13 +20,22 @@ def get_current_db():
 db = LocalProxy(get_current_db)
 
 
+form_imported = False
+try:
+    from .form import *
+    form_imported = True
+except ImportError:
+    pass
+
+
 class ModelsFeature(Feature):
     name = "models"
     defaults = {"backend": "persistpy",
                 "pagination_per_page": 10,
                 "scopes": {},
                 "import_models": True,
-                "ensure_schema": True}
+                "ensure_schema": True,
+                "admin_models": []}
     
     def init_app(self, app):
         self.backend_cls = self.get_backend_class(self.options["backend"])
@@ -60,6 +72,33 @@ class ModelsFeature(Feature):
                 __import__(models_pkg)
             except ImportError:
                 pass
+
+        if form_imported:
+            app.jinja_env.loader.bottom_loaders.append(FileLoader(
+                os.path.join(os.path.dirname(__file__), "form_template.html"), "model_form_template.html"))
+            app.jinja_env.loader.bottom_loaders.append(FileLoader(
+                os.path.join(os.path.dirname(__file__), "bs_form_template.html"), "model_bs_form_template.html"))
+
+    def init_admin(self, admin, app):
+        from .admin import create_model_admin_blueprint
+        app.jinja_env.loader.bottom_loaders.append(FileSystemLoader(
+            os.path.join(os.path.dirname(__file__), "admin/templates")))
+        for model in self.options['admin_models']:
+            kwargs = {}
+            if isinstance(model, dict):
+                model, kwargs = model.items()[0]
+            model = self.ensure_model(model)
+            with_counter = kwargs.pop('with_counter', False)
+            counter_filters = kwargs.pop('counter_filters', {})
+            title = inflection.pluralize(inflection.humanize(model.__name__))
+            kwargs.setdefault('title', title)
+            kwargs.setdefault('menu', title)
+            name = inflection.pluralize(inflection.underscore(model.__name__))
+            admin.register_blueprint(create_model_admin_blueprint(name, __name__, model, **kwargs))
+            if with_counter:
+                admin.register_dashboard_counter(title,
+                    lambda: self.query(model).filter(**counter_filters).count(),
+                    icon=kwargs.get('icon'))
 
     def get_backend_class(self, name):
         try:
@@ -121,7 +160,8 @@ class ModelsFeature(Feature):
         return q
 
     @action("build_model_query")
-    def build_query(self, model, scope=None, filter_from=None, order_by=None, limit=None, offset=None, **kwargs):
+    def build_query(self, model, scope=None, filter_from=None, search_query=None, search_query_default_field=None,
+                    order_by=None, limit=None, offset=None, **kwargs):
         q = self.scoped_query(model, scope)
 
         filters = {}
@@ -131,10 +171,14 @@ class ModelsFeature(Feature):
             filters.update(dict([(k, v) for k, v in request.values.items()]))
         elif filter_from == "args":
             filters.update(dict([(k, v) for k, v in request.view_args.items()]))
+        if 'filters_or' in kwargs:
+            q = q.filter(or_(*kwargs.pop('filters_or')))
         filters.update(kwargs.get("filters", kwargs))
 
         if filters:
             q = q.filter(**filters)
+        if search_query:
+            q = q.filter(*parse_search_query(search_query, search_query_default_field))
         if order_by:
             q = q.order_by(order_by)
         if limit:
@@ -152,7 +196,7 @@ class ModelsFeature(Feature):
             per_page = self.options["pagination_per_page"]
         total = query.order_by(None).offset(None).limit(None).count()
         pagination = Pagination(page, per_page, total)
-        if check_bounds and (page < 1 or page > pagination.nb_pages):
+        if check_bounds and pagination.nb_pages > 0 and (page < 1 or page > pagination.nb_pages):
             raise PageOutOfBoundError()
         return query.offset(pagination.offset).limit(per_page), pagination
 
@@ -173,7 +217,7 @@ class ModelsFeature(Feature):
         q = self.build_query(model, **query)
 
         if paginate:
-            per_page = paginate if isinstance(paginate, int) else None
+            per_page = paginate if not isinstance(paginate, bool) else None
             try:
                 q, pagination = self.paginate(q, page, per_page)
             except PageOutOfBoundError:
@@ -214,7 +258,7 @@ class ModelsFeature(Feature):
             self.save.as_ = as_single_model(obj.__class__)
         return obj
 
-    @action("create_form_model", default_option="model", requires=["form"])
+    @action("create_model_from_form", default_option="model", requires=["form"])
     def create_from_form(self, model, form=None, **attrs):
         form = form or current_context.data.form
         obj = self.ensure_model(model)()
@@ -225,7 +269,7 @@ class ModelsFeature(Feature):
         return obj
 
     @action("save_form_model", default_option="model", requires=["form"])
-    def save_form(self, obj=None, model=None, form=None, **attrs):
+    def save_from_form(self, obj=None, model=None, form=None, **attrs):
         form = form or current_context.data.form
         obj = clean_proxy(obj)
         auto_assign = False
@@ -238,13 +282,17 @@ class ModelsFeature(Feature):
         form.populate_obj(obj)
         populate_obj(obj, clean_kwargs_proxy(attrs))
         self.backend.save(obj)
-        if not self.save_form.as_ and auto_assign:
-            self.save_form.as_ = as_single_model(obj.__class__)
+        if not self.save_from_form.as_ and auto_assign:
+            self.save_from_form.as_ = as_single_model(obj.__class__)
         return obj
 
     @action("delete_model", default_option="obj")
     def delete(self, obj):
         self.backend.remove(obj)
+
+    @action("create_form_from_model", default_option="model", requires=["form"])
+    def create_form_from_model(self, model, **kwargs):
+        return create_form_from_model(model, **kwargs)
 
     @action("check_model_not_exists")
     def check_not_exists(self, model, error_message=None, **query):

@@ -59,6 +59,13 @@ class Backend(object):
     def ensure_schema(self, model_name, fields):
         pass
 
+    def inspect_fields(self, obj):
+        fields = []
+        for f in dir(obj):
+            if not f.startswith('_'):
+                fields.append((f, dict(type=None)))
+        return fields
+
     def find_by_id(self, id):
         raise NotImplementedError()
 

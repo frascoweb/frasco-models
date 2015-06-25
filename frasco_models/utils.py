@@ -2,6 +2,7 @@ import inflection
 from werkzeug import LocalProxy
 import math
 from flask import current_app
+from .query import or_
 
 
 def as_single_model(model):
@@ -101,3 +102,25 @@ def ensure_unique_value(model, column, value, fallback=None, counter_start=1):
         value = fallback % {'counter': counter}
         counter += 1
     return value
+
+
+def parse_search_query(qs, default_field=None, default_op='AND'):
+    parts = qs.split(' ')
+    q = []
+    default_field_values = []
+    for part in parts:
+        if ':' in part:
+            field, value = part.split(':', 1)
+            q.append((field, value))
+        else:
+            default_field_values.append(part)
+    if default_field_values and default_field:
+        if not isinstance(default_field, (list, tuple)):
+            default_field = (default_field,)
+        filters = []
+        for field in default_field:
+            filters.extend([(field, v) for v in default_field_values])
+        q.append(or_(*filters))
+    if default_op == 'OR':
+        return or_(*q)
+    return q

@@ -1,0 +1,19 @@
+{% use_layout "admin/layout.html" %}
+
+<{ admin_table_widget title=admin_section_title searchform=True columns=['ID']+table_headers actions=actions }>
+  <tbody>
+    {% for obj in objs %}
+      <tr>
+        <td>
+          {% if can_edit %}<a href="{{ url_for('.edit', id=obj.id) }}">{% endif %}
+          #{{ obj.id }}
+          {% if can_edit %}</a>{% endif %}
+        </td>
+        {% for col in model_fields %}
+        <td>{{ getattr(obj, col, None) }}</td>
+        {% endfor %}
+      </tr>
+    {% endfor %}
+  </tbody>
+</{}>
+<{ bs_pagination_obj pagination }/>

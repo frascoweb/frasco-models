@@ -1,0 +1,13 @@
+{% use_layout "admin/layout.html" %}
+{% load_macro bs_linkbtn %}
+
+<div class="row">
+  <div class="col-md-9">
+    {{ form() }}
+  </div>
+  <div class="col-md-3">
+    {% for label, route_name, btn_opts in edit_actions %}
+        {{ bs_linkbtn(url=url_for(route_name, id=obj.id), label=label, **btn_opts) }}
+    {% endfor %}
+  </div>
+</div>

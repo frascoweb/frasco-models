@@ -54,15 +54,14 @@ class Query(object):
     def filter(self, *grouped_filters, **filters):
         q = self.clone()
         q._filters.extend(grouped_filters)
-        for field, value in filters.iteritems():
-            q._filters.append((field, value))
+        q._filters.extend(filters.items())
         return q
 
     def order_by(self, field, direction=None):
         q = self.clone()
         if field is None:
             q._order_by = []
-            return
+            return q
         if not isinstance(field, (list, tuple)):
             field = map(str.strip, field.split(','))
         for f in field:
@@ -86,7 +85,7 @@ class Query(object):
         for attr in attr_to_clone:
             v = getattr(self, attr)
             if isinstance(v, dict):
-                data[attr] = dict(v)
+                data[attr] = dict(**v)
             elif isinstance(v, list):
                 data[attr] = list(v)
             else:
@@ -129,7 +128,7 @@ class Query(object):
                 "limit": self._limit}
 
     def __iter__(self):
-        return self.all()
+        return iter(self.all())
 
     def __len__(self):
         return self.count()
