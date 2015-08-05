@@ -7,7 +7,8 @@ import inflection
 def create_model_admin_blueprint(name, package, model, title=None, menu=None, icon=None, template_folder=None,
                                  list_columns=None, search_query_default_field=None, edit_actions=None,
                                  with_create=True, with_edit=True, with_delete=True, url_prefix=None,
-                                 form_fields=None, filters=None, list_actions=None, can_edit=None, can_create=None):
+                                 form_fields=None, form_fields_specs=None, form_exclude_fields=None,
+                                 filters=None, list_actions=None, can_edit=None, can_create=None):
     if not url_prefix:
         url_prefix = "/%s" % name
     bp = AdminBlueprint("admin_%s" % name, package, url_prefix=url_prefix,
@@ -17,7 +18,9 @@ def create_model_admin_blueprint(name, package, model, title=None, menu=None, ic
     def get_form_class():
         if not getattr(model, '__admin_form__', None):
             model.__admin_form__ = create_form_class_from_model(model,
-                fields=getattr(model, '__admin_form_fields__', form_fields))
+                fields=getattr(model, '__admin_form_fields__', form_fields),
+                fields_specs=getattr(model, '__admin_form_fields_specs__', form_fields_specs),
+                exclude_fields=getattr(model, '__admin_form_exclude_fields__', form_exclude_fields))
         return model.__admin_form__
     bp.get_form_class = get_form_class
 

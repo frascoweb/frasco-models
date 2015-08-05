@@ -33,6 +33,7 @@ class SQLAlchemy(BaseSQLAchemy):
 
 sqla_type_mapping = [
     (sqltypes.Integer, int),
+    (sqltypes.Float, float),
     (sqltypes.Boolean, bool),
     (sqltypes.DateTime, datetime.datetime),
     (sqltypes.Date, datetime.date)
