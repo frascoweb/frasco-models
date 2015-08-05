@@ -20,7 +20,6 @@ setup(
     install_requires=[
         'frasco',
         'persistpy',
-        'inflection',
-        'flask-mongoengine>=0.7'
+        'inflection'
     ]
 )
