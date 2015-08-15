@@ -1,6 +1,6 @@
 from __future__ import absolute_import
 from frasco import copy_extra_feature_options, current_app
-from frasco.utils import JSONEncoder
+from frasco.utils import JSONEncoder, ContextStack, DelayedCallsContext
 from frasco_models import Backend, ModelSchemaError, and_, split_field_operator, QueryError
 from frasco_models.utils import clean_proxy
 from flask.ext.sqlalchemy import SQLAlchemy as BaseSQLAchemy, Model as BaseModel, _BoundDeclarativeMeta, _QueryProperty
@@ -10,6 +10,8 @@ from sqlalchemy.inspection import inspect as sqlainspect
 from sqlalchemy.sql import sqltypes
 import inspect
 import datetime
+from contextlib import contextmanager
+import functools
 
 
 class Model(BaseModel):
@@ -184,3 +186,77 @@ class SqlalchemyBackend(Backend):
                     G.add_edge(t.name, table)
         agraph = nx.to_agraph(G)
         agraph.draw(filename, format='png', prog='dot')
+
+
+_transaction_ctx = ContextStack()
+delayed_tx_calls = DelayedCallsContext()
+
+class Transaction(object):
+    def __init__(self, begin=True, isolated=False):
+        self.ended = False
+        self.isolated = isolated
+        if begin:
+            self.begin()
+
+    def begin(self):
+        if self.isolated or _transaction_ctx.top:
+            current_app.features.models.db.session.begin(subtransactions=True)
+        _transaction_ctx.push(self)
+        delayed_tx_calls.push()
+
+    def commit(self):
+        self.ended = True
+        current_app.features.models.db.session.commit()
+        _transaction_ctx.pop()
+        delayed_tx_calls.pop()
+
+    def rollback(self):
+        self.ended = True
+        current_app.features.models.db.session.rollback()
+        _transaction_ctx.pop()
+        delayed_tx_calls.pop(drop_calls=True)
+
+
+@contextmanager
+def transaction(*args, **kwargs):
+    """Execute service calls as part of a transaction.
+    Because services assumes they are the primary endpoint,
+    they will always commit. However, this behavior is not
+    always desire when calling services internally (eg: in the
+    case you are calling many services at once). This context
+    will ensure that service calls occur as part of a transaction.
+    All db queries will happen in a subtransaction and push events
+    and enqueued tasks will be delayed until the end of the context.
+    The transaction will be commited before exciting the context.
+    """
+    trans = Transaction(*args, **kwargs)
+    try:
+        yield
+        if not trans.ended:
+            trans.commit()
+    except Exception as e:
+        if not trans.ended:
+            trans.rollback()
+        raise e
+
+
+def commit():
+    if _transaction_ctx.top:
+        _transaction_ctx.top.commit()
+
+
+def rollback():
+    if _transaction_ctx.top:
+        _transaction_ctx.top.rollback()
+
+
+def as_transaction(func):
+    """This decorator will wrap the function call in a transaction.
+    This decorator must be used to mark service endpoints which
+    needs to commit to the db.
+    """
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        with transaction():
+            return func(*args, **kwargs)
+    return wrapper
