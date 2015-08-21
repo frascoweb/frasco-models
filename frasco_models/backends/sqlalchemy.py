@@ -48,7 +48,7 @@ class SqlalchemyBackend(Backend):
     def __init__(self, app, options):
         super(SqlalchemyBackend, self).__init__(app, options)
         copy_extra_feature_options(app.features.models, app.config, 'SQLALCHEMY_')
-        self.db = SQLAlchemy(app)
+        self.db = SQLAlchemy(app, session_options=options.get('session_options'))
         
         @app.cli.command()
         def create_db():
