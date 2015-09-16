@@ -17,6 +17,8 @@ class RegisteringMetaClass(type):
 
 
 class Backend(object):
+    requires_commit = False
+
     def __init__(self, app, options):
         self.app = app
         self.options = options
@@ -45,7 +47,16 @@ class Backend(object):
     def close(self):
         pass
 
-    def save(self, obj):
+    def begin_transaction(self):
+        pass
+
+    def commit_transaction(self):
+        pass
+
+    def rollback_transaction(self):
+        pass
+
+    def add(self, obj):
         obj.save()
 
     def remove(self, obj):

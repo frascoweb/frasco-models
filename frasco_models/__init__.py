@@ -7,6 +7,7 @@ from werkzeug.local import LocalProxy
 from .backend import *
 from .utils import *
 from .query import *
+from .transaction import *
 import inspect
 import os
 import inflection
@@ -41,26 +42,11 @@ class ModelsFeature(Feature):
         self.backend_cls = self.get_backend_class(self.options["backend"])
         self.backend = self.backend_cls(app, self.options)
         self.scopes = compile_expr(self.options["scopes"])
-        self.connected = False
         self.models = {}
+        self.current_transaction = current_transaction
 
         global _db
         self.db = _db = self.backend.db
-
-        @listens_to("before_task")
-        @listens_to("before_command")
-        @app.before_request
-        def before_request(*args, **kwargs):
-            if not self.connected:
-                self.backend.connect()
-                self.connected = True
-        @listens_to("after_task")
-        @listens_to("after_command")
-        @app.teardown_request
-        def teardown_request(*args, **kwargs):
-            if self.connected:
-                self.backend.close()
-                self.connected = False
 
         if self.options["import_models"]:
             models_pkg = self.options['import_models']
@@ -146,6 +132,9 @@ class ModelsFeature(Feature):
 
     def query(self, model):
         return Query(self.ensure_model(model), self.backend)
+
+    def transaction(self, *args, **kwargs):
+        return transaction(*args, **kwargs)
 
     def scoped_query(self, model, scope=None):
         q = self.query(model)
@@ -245,6 +234,7 @@ class ModelsFeature(Feature):
         return obj
 
     @action("save_model", default_option="obj")
+    @as_transaction
     def save(self, obj=None, model=None, **attrs):
         auto_assign = False
         obj = clean_proxy(obj)
@@ -253,7 +243,7 @@ class ModelsFeature(Feature):
             auto_assign = True
         if attrs:
             populate_obj(obj, clean_kwargs_proxy(attrs))
-        self.backend.save(obj)
+        self.backend.add(obj)
         if not self.save.as_ and auto_assign:
             self.save.as_ = as_single_model(obj.__class__)
         return obj
@@ -269,6 +259,7 @@ class ModelsFeature(Feature):
         return obj
 
     @action("save_form_model", default_option="model", requires=["form"])
+    @as_transaction
     def save_from_form(self, obj=None, model=None, form=None, **attrs):
         form = form or current_context.data.form
         obj = clean_proxy(obj)
@@ -281,12 +272,13 @@ class ModelsFeature(Feature):
                 obj = model()
         form.populate_obj(obj)
         populate_obj(obj, clean_kwargs_proxy(attrs))
-        self.backend.save(obj)
+        self.backend.add(obj)
         if not self.save_from_form.as_ and auto_assign:
             self.save_from_form.as_ = as_single_model(obj.__class__)
         return obj
 
     @action("delete_model", default_option="obj")
+    @as_transaction
     def delete(self, obj):
         self.backend.remove(obj)
 
@@ -312,3 +304,11 @@ class ModelsFeature(Feature):
     def create_unique_slug(self, value, model, column="slug", **kwargs):
         slug = slugify(value)
         return ensure_unique_value(model, column, slug, **kwargs)
+
+
+def save_model(model):
+    current_app.features.models.backend.add(model)
+
+
+def delete_model(model):
+    current_app.features.models.backend.remove(model)
