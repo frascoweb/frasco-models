@@ -16,6 +16,10 @@ class RegisteringMetaClass(type):
         cls.__backend__.models[name] = cls
 
 
+def ref(model_name=None):
+    return {"$ref": model_name}
+
+
 class Backend(object):
     requires_commit = False
 
