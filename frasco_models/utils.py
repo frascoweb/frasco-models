@@ -78,12 +78,7 @@ def move_obj_position_in_collection(obj, new_position, position_field='position'
     if not data:
         data = {}
     current_position = getattr(obj, position_field, 0)
-    up = new_position > current_position
-    shift = -1 if up else 1
-    lower_idx = min(current_position, new_position)
-    lower_idx += 1 if up else 0
-    upper_idx = max(current_position, new_position)
-    upper_idx -= 0 if up else 1
+    shift, lower_idx, upper_idx = compute_move_obj_position_in_collection_bounds(current_position, new_position)
 
     q = current_app.features.models.query(obj.__class__)
     if scope:
@@ -91,6 +86,18 @@ def move_obj_position_in_collection(obj, new_position, position_field='position'
     q = q.filter(**dict([('%s__gte' % position_field, lower_idx), ('%s__lte' % position_field, upper_idx)]))
     q.update(dict(dict([('%s__incr' % position_field, shift)]), **data))
     setattr(obj, position_field, new_position)
+
+
+def compute_move_obj_position_in_collection_bounds(current_position, new_position):
+    if current_position is None:
+        return 1, new_position, None
+    up = new_position > current_position
+    shift = -1 if up else 1
+    lower_idx = min(current_position, new_position)
+    lower_idx += 1 if up else 0
+    upper_idx = max(current_position, new_position)
+    upper_idx -= 0 if up else 1
+    return shift, lower_idx, upper_idx
 
 
 def ensure_unique_value(model, column, value, fallback=None, counter_start=1):
