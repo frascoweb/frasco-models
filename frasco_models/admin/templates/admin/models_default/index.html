@@ -5,7 +5,7 @@
     {% for obj in objs %}
       <tr>
         <td>
-          {% if can_edit %}<a href="{{ url_for('.edit', id=obj.id) }}">{% endif %}
+          {% if can_edit %}<a href="{{ url_for(can_edit, id=obj.id) }}">{% endif %}
           #{{ obj.id }}
           {% if can_edit %}</a>{% endif %}
         </td>

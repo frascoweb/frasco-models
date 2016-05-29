@@ -37,10 +37,10 @@ def create_model_admin_blueprint(name, package, model, title=None, menu=None, ic
         list_actions = []
     if not filters:
         filters = {}
-    if can_create is None:
-        can_create = with_create
-    if can_edit is None:
-        can_edit = with_edit
+    if can_create is True or (can_create is None and with_create):
+        can_create = ".create"
+    if can_edit is True or (can_edit is None and with_edit):
+        can_edit = ".edit"
     if with_delete:
         edit_actions.append(('Delete', '.delete', {'style': 'danger'}))
 
@@ -61,7 +61,7 @@ def create_model_admin_blueprint(name, package, model, title=None, menu=None, ic
                 q['search_query_default_field'] = search_query_default_field
         current_context['actions'] = []
         if can_create:
-            current_context['actions'].append(('Create', url_for('.create')))
+            current_context['actions'].append(('Create', url_for(can_create)))
         for label, url in list_actions:
             if callable(url):
                 url = url()
