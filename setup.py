@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='frasco-models',
-    version='0.4.2',
+    version='0.5',
     url='http://github.com/frascoweb/frasco-models',
     license='MIT',
     author='Maxime Bouroumeau-Fuseau',
@@ -19,7 +19,6 @@ setup(
     platforms='any',
     install_requires=[
         'frasco',
-        'persistpy',
         'inflection'
     ]
 )

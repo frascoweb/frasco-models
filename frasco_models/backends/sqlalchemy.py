@@ -3,7 +3,7 @@ from frasco import copy_extra_feature_options, current_app
 from frasco.utils import JSONEncoder, ContextStack, DelayedCallsContext
 from frasco_models import Backend, ModelSchemaError, and_, split_field_operator, QueryError
 from frasco_models.utils import clean_proxy
-from flask.ext.sqlalchemy import SQLAlchemy as BaseSQLAchemy, Model as BaseModel, _BoundDeclarativeMeta, _QueryProperty
+from flask_sqlalchemy import SQLAlchemy as BaseSQLAchemy, Model as BaseModel, _BoundDeclarativeMeta, _QueryProperty
 from sqlalchemy.ext.declarative import declarative_base
 import sqlalchemy
 from sqlalchemy.inspection import inspect as sqlainspect

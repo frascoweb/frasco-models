@@ -20,23 +20,8 @@ Options:
 ## Backends
 
 Frasco-Models exposes a generic interface that uses backend to perform operations.
-At the moment, two backends are supported out of the box, both targeting MongoDB.
 
 Backends options are provided as part of the feature's options.
-
-### persistpy
-
-[Persistpy](https://github.com/frascoweb/persistpy) makes is very easy to get started.
-It provides a very flexible way to persist any kind of data without any kind of
-pre-determined structure. This is the default backend.
-
-With Persistpy, models are completely dynamic, you do not need to define them in
-advance, you can just create them on the fly.
-
-Options:
-
- - *db*: the database name (mandatory)
- - *url*: the url of the mongodb server (default: localhost)
 
 ### mongoengine
 
@@ -54,6 +39,10 @@ Options:
  - *port*
  - *username*
  - *password*
+
+### sqlalchemy
+
+need docs :(
 
 ## Querying
 

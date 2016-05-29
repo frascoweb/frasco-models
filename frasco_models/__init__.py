@@ -31,7 +31,7 @@ except ImportError:
 
 class ModelsFeature(Feature):
     name = "models"
-    defaults = {"backend": "persistpy",
+    defaults = {"backend": None,
                 "pagination_per_page": 10,
                 "scopes": {},
                 "import_models": True,
@@ -39,6 +39,8 @@ class ModelsFeature(Feature):
                 "admin_models": []}
     
     def init_app(self, app):
+        if not self.options["backend"]:
+            raise Exception("Missing backend")
         self.backend_cls = self.get_backend_class(self.options["backend"])
         self.backend = self.backend_cls(app, self.options)
         self.scopes = compile_expr(self.options["scopes"])

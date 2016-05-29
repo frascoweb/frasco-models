@@ -3,7 +3,7 @@ from frasco import copy_extra_feature_options
 from frasco.utils import JSONEncoder
 from frasco_models import Backend, ModelSchemaError, and_, split_field_operator
 from frasco_models.utils import clean_proxy
-from flask.ext.mongoengine import (MongoEngine, Document as FlaskDocument,\
+from flask_mongoengine import (MongoEngine, Document as FlaskDocument,\
                                    DynamicDocument as FlaskDynamicDocument,\
                                    BaseQuerySet as FlaskQuerySet)
 from mongoengine import Q, DynamicDocument as BaseDynamicDocument, ListField
