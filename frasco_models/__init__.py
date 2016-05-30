@@ -58,8 +58,9 @@ class ModelsFeature(Feature):
                 models_pkg = app.import_name + "." + models_pkg
             try:
                 __import__(models_pkg)
-            except ImportError:
-                pass
+            except ImportError as e:
+                if "No module named %s" % models_pkg.split('.')[-1] not in e.message:
+                    raise e
 
         if form_imported:
             app.jinja_env.loader.bottom_loaders.append(FileLoader(
