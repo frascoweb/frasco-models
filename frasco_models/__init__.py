@@ -60,7 +60,7 @@ class ModelsFeature(Feature):
                 __import__(models_pkg)
             except ImportError as e:
                 if "No module named %s" % models_pkg.split('.')[-1] not in e.message:
-                    raise e
+                    raise
 
         if form_imported:
             app.jinja_env.loader.bottom_loaders.append(FileLoader(

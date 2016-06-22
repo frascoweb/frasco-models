@@ -62,7 +62,7 @@ def transaction(*args, **kwargs):
     except Exception as e:
         if not trans.ended:
             trans.rollback()
-        raise e
+        raise
 
 
 def commit():

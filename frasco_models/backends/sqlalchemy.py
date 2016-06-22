@@ -60,7 +60,7 @@ class SqlalchemyBackend(Backend):
                 except ImportError:
                     app.logger.info('Install networkx and pygraphviz to generate a graph of the circular dependency')
                     pass
-                raise e
+                raise
 
         app.cli.command('drop_db')(self.db.drop_all)
 
