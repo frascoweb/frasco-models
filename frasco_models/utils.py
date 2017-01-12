@@ -3,6 +3,7 @@ from werkzeug import LocalProxy
 import math
 from flask import current_app
 from .query import or_
+from frasco.utils import unknown_value
 
 
 def as_single_model(model):
@@ -74,10 +75,11 @@ class PageOutOfBoundError(Exception):
     pass
 
 
-def move_obj_position_in_collection(obj, new_position, position_field='position', scope=None, data=None):
+def move_obj_position_in_collection(obj, new_position, position_field='position', scope=None, data=None, current_position=unknown_value):
     if not data:
         data = {}
-    current_position = getattr(obj, position_field, 0)
+    if current_position is unknown_value:
+        current_position = getattr(obj, position_field, None)
     shift, lower_idx, upper_idx = compute_move_obj_position_in_collection_bounds(current_position, new_position)
 
     q = current_app.features.models.query(obj.__class__)
