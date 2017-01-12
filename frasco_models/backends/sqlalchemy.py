@@ -64,6 +64,16 @@ class SqlalchemyBackend(Backend):
 
         app.cli.command('drop_db')(self.db.drop_all)
 
+        if app.features.exists('tasks'):
+            from celery.signals import task_postrun
+            def handle_celery_postrun(retval=None, *args, **kwargs):
+                if app.config.get('SQLALCHEMY_COMMIT_ON_TEARDOWN'):
+                    if not isinstance(retval, Exception):
+                        self.db.session.commit()
+                if not app.config.get('CELERY_ALWAYS_EAGER'):
+                    self.db.session.remove()
+            task_postrun.connect(handle_celery_postrun, weak=False)
+
     def ensure_model(self, name):
         if isinstance(name, self.db.Model):
             return name
