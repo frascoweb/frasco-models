@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='frasco-models',
-    version='0.5.3',
+    version='0.6.0',
     url='http://github.com/frascoweb/frasco-models',
     license='MIT',
     author='Maxime Bouroumeau-Fuseau',

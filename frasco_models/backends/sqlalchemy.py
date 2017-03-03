@@ -3,7 +3,7 @@ from frasco import copy_extra_feature_options, current_app
 from frasco.utils import JSONEncoder, ContextStack, DelayedCallsContext
 from frasco_models import Backend, ModelSchemaError, and_, split_field_operator, QueryError
 from frasco_models.utils import clean_proxy
-from flask_sqlalchemy import SQLAlchemy as BaseSQLAchemy, Model as BaseModel, _BoundDeclarativeMeta, _QueryProperty
+from flask_sqlalchemy import SQLAlchemy, Model as BaseModel
 from sqlalchemy.ext.declarative import declarative_base
 import sqlalchemy
 from sqlalchemy.inspection import inspect as sqlainspect
@@ -23,16 +23,6 @@ class Model(BaseModel):
         return cls.query.get(id)
 
 
-class SQLAlchemy(BaseSQLAchemy):
-    def make_declarative_base(self, metadata=None):
-        """Creates the declarative base."""
-        base = declarative_base(cls=Model, name='Model',
-                                metadata=metadata,
-                                metaclass=_BoundDeclarativeMeta)
-        base.query = _QueryProperty(self)
-        return base
-
-
 sqla_type_mapping = [
     (sqltypes.Integer, int),
     (sqltypes.Float, float),
@@ -48,7 +38,8 @@ class SqlalchemyBackend(Backend):
     def __init__(self, app, options):
         super(SqlalchemyBackend, self).__init__(app, options)
         copy_extra_feature_options(app.features.models, app.config, 'SQLALCHEMY_')
-        self.db = SQLAlchemy(app, session_options=options.get('session_options'))
+        self.db = SQLAlchemy(app, session_options=options.get('session_options'),
+            model_class=Model)
         
         @app.cli.command()
         def create_db():
