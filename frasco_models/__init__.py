@@ -45,7 +45,7 @@ class ModelsFeature(Feature):
         self.backend = self.backend_cls(app, self.options)
         self.scopes = compile_expr(self.options["scopes"])
         self.models = {}
-        self.current_transaction = current_transaction
+        self.delayed_tx_calls = delayed_tx_calls
 
         global _db
         self.db = _db = self.backend.db

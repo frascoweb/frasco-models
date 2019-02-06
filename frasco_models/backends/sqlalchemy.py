@@ -93,6 +93,9 @@ class SqlalchemyBackend(Backend):
     def begin_transaction(self):
         self.db.session.begin(subtransactions=True)
 
+    def flusb_transaction(self):
+        self.db.session.fush()
+
     def commit_transaction(self):
         self.db.session.commit()
 

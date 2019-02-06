@@ -57,6 +57,9 @@ class Backend(object):
     def commit_transaction(self):
         pass
 
+    def flush_transaction(self):
+        pass
+
     def rollback_transaction(self):
         pass
 
